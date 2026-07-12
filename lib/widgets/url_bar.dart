@@ -75,7 +75,7 @@ class _UrlBarState extends State<UrlBar> {
             autocorrect: false,
             style: const TextStyle(fontSize: 12, color: kOnSurface),
             decoration: const InputDecoration(hintText: 'https://...'),
-            onChanged: (v) => provider.setUrl(v),
+            onChanged: (v) => provider.setUrl(v, parseParams: true),
           ),
         ),
       ],

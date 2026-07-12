@@ -26,6 +26,9 @@ class RequestProvider extends ChangeNotifier {
 
   List<HeaderRowState> headerRows = [];
   List<BodyFieldRowState> bodyFieldRows = [];
+  List<HeaderRowState> queryParamRows = [];
+
+  bool _syncingUrl = false;
 
   // Response state
   bool loading = false;
@@ -291,8 +294,12 @@ class RequestProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setUrl(String v) {
+  void setUrl(String v, {bool parseParams = false}) {
     url = v;
+    if (parseParams) {
+      parseQueryParamsFromUrl();
+      notifyListeners();
+    }
   }
 
   void setBody(String v) {
@@ -344,6 +351,77 @@ class RequestProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void addQueryParamRow() {
+    queryParamRows.add(HeaderRowState());
+    _syncUrlFromParams();
+    notifyListeners();
+  }
+
+  void removeQueryParamRow(int index) {
+    queryParamRows[index].dispose();
+    queryParamRows.removeAt(index);
+    _syncUrlFromParams();
+    notifyListeners();
+  }
+
+  int get activeQueryParamCount => queryParamRows
+      .where((r) => r.enabled && r.keyCtrl.text.trim().isNotEmpty)
+      .length;
+
+  void parseQueryParamsFromUrl() {
+    if (_syncingUrl) return;
+    _syncingUrl = true;
+
+    final uri = Uri.tryParse(url);
+    if (uri != null && uri.queryParameters.isNotEmpty) {
+      for (final r in queryParamRows) {
+        r.dispose();
+      }
+      queryParamRows.clear();
+      uri.queryParameters.forEach((key, value) {
+        queryParamRows.add(HeaderRowState(key: key, value: value));
+      });
+    } else if (queryParamRows.isNotEmpty) {
+      for (final r in queryParamRows) {
+        r.dispose();
+      }
+      queryParamRows.clear();
+    }
+
+    _syncingUrl = false;
+  }
+
+  void _syncUrlFromParams() {
+    if (_syncingUrl) return;
+    _syncingUrl = true;
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      _syncingUrl = false;
+      return;
+    }
+
+    final params = <String, String>{};
+    for (final r in queryParamRows) {
+      if (r.keyCtrl.text.trim().isNotEmpty) {
+        params[r.keyCtrl.text.trim()] = r.valueCtrl.text;
+      }
+    }
+
+    if (params.isEmpty) {
+      url = uri.origin + uri.path;
+    } else {
+      url = '${uri.origin}${uri.path}?${Uri(queryParameters: params).query}';
+    }
+
+    _syncingUrl = false;
+  }
+
+  void onQueryParamsChanged() {
+    _syncUrlFromParams();
+    notifyListeners();
+  }
+
   void loadRecord(RequestRecord rec) {
     for (final r in headerRows) {
       r.dispose();
@@ -351,8 +429,12 @@ class RequestProvider extends ChangeNotifier {
     for (final r in bodyFieldRows) {
       r.dispose();
     }
+    for (final r in queryParamRows) {
+      r.dispose();
+    }
     headerRows.clear();
     bodyFieldRows.clear();
+    queryParamRows.clear();
 
     method = rec.method;
     url = rec.url;
@@ -370,6 +452,7 @@ class RequestProvider extends ChangeNotifier {
     bodyFieldRows.addAll(
       rec.bodyFields.map((f) => BodyFieldRowState(key: f.key, value: f.value)),
     );
+    parseQueryParamsFromUrl();
     responseBody = '';
     statusCode = null;
     notifyListeners();
@@ -382,8 +465,12 @@ class RequestProvider extends ChangeNotifier {
     for (final r in bodyFieldRows) {
       r.dispose();
     }
+    for (final r in queryParamRows) {
+      r.dispose();
+    }
     headerRows.clear();
     bodyFieldRows.clear();
+    queryParamRows.clear();
     method = 'GET';
     url = '';
     body = '';
@@ -452,6 +539,25 @@ class RequestProvider extends ChangeNotifier {
       await loadCollections();
     } catch (e) {
       debugPrint('Erro ao adicionar request à coleção: $e');
+    }
+  }
+
+  Future<void> renameCollection(String id, String newName) async {
+    try {
+      final idx = collections.indexWhere((c) => c.id == id);
+      if (idx < 0) return;
+
+      final old = collections[idx];
+      final updated = Collection(
+        id: old.id,
+        name: newName,
+        timestamp: old.timestamp,
+        requests: old.requests,
+      );
+      await _storage.saveCollection(updated);
+      await loadCollections();
+    } catch (e) {
+      debugPrint('Erro ao renomear coleção: $e');
     }
   }
 
@@ -592,6 +698,9 @@ class RequestProvider extends ChangeNotifier {
       r.dispose();
     }
     for (final r in bodyFieldRows) {
+      r.dispose();
+    }
+    for (final r in queryParamRows) {
       r.dispose();
     }
     super.dispose();

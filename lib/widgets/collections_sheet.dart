@@ -157,14 +157,18 @@ class _CollectionsSheetState extends State<CollectionsSheet> {
                 ),
                 const SizedBox(width: 4),
                 InkWell(
-                  onTap: () async {
-                    await provider.deleteCollection(col.id);
-                    if (_expandedCollectionId == col.id) {
-                      setState(() {
-                        _expandedCollectionId = null;
-                      });
-                    }
-                  },
+                  onTap: () => _showRenameDialog(context, provider, col),
+                  borderRadius: BorderRadius.circular(4),
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(Icons.edit,
+                        size: 16, color: Color(0xFF666666)),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: () => _confirmDeleteCollection(
+                      context, provider, col),
                   borderRadius: BorderRadius.circular(4),
                   child: const Padding(
                     padding: EdgeInsets.all(6),
@@ -251,9 +255,8 @@ class _CollectionsSheetState extends State<CollectionsSheet> {
               ),
             ),
             InkWell(
-              onTap: () async {
-                await provider.deleteRequestFromCollection(col.id, rec.id);
-              },
+              onTap: () => _confirmDeleteRequest(
+                  context, provider, col, rec),
               borderRadius: BorderRadius.circular(4),
               child: const Padding(
                 padding: EdgeInsets.all(4),
@@ -342,6 +345,113 @@ class _CollectionsSheetState extends State<CollectionsSheet> {
           duration: const Duration(seconds: 2),
         ));
       }
+    }
+  }
+
+  void _showRenameDialog(
+      BuildContext context, RequestProvider provider, Collection col) {
+    final ctrl = TextEditingController(text: col.name);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F1F),
+        title: const Text('Renomear coleção',
+            style: TextStyle(color: Colors.white, fontSize: 15)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(hintText: 'Novo nome'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar',
+                style: TextStyle(color: Color(0xFF888888))),
+          ),
+          TextButton(
+            onPressed: () async {
+              final name = ctrl.text.trim();
+              if (name.isEmpty || name == col.name) {
+                Navigator.pop(ctx);
+                return;
+              }
+              await provider.renameCollection(col.id, name);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: Text('Salvar',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteCollection(
+      BuildContext context, RequestProvider provider, Collection col) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F1F),
+        title: const Text('Excluir coleção?',
+            style: TextStyle(color: Colors.white, fontSize: 15)),
+        content: Text(
+            'Deseja excluir a coleção "${col.name}" e todos os ${col.requests.length} ${col.requests.length == 1 ? 'request' : 'requests'} dentro dela?',
+            style:
+                const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar',
+                style: TextStyle(color: Color(0xFF888888))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir',
+                style: TextStyle(color: Color(0xFFF87171))),
+          ),
+        ],
+      ),
+    );
+    if (result == true) {
+      await provider.deleteCollection(col.id);
+      if (_expandedCollectionId == col.id) {
+        setState(() {
+          _expandedCollectionId = null;
+        });
+      }
+    }
+  }
+
+  void _confirmDeleteRequest(BuildContext context, RequestProvider provider,
+      Collection col, RequestRecord rec) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F1F),
+        title: const Text('Excluir request?',
+            style: TextStyle(color: Colors.white, fontSize: 15)),
+        content: Text(
+            'Remover ${rec.method} ${rec.url.isEmpty ? "(sem URL)" : rec.url} da coleção "${col.name}"?',
+            style:
+                const TextStyle(color: Color(0xFF888888), fontSize: 12)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar',
+                style: TextStyle(color: Color(0xFF888888))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir',
+                style: TextStyle(color: Color(0xFFF87171))),
+          ),
+        ],
+      ),
+    );
+    if (result == true) {
+      await provider.deleteRequestFromCollection(col.id, rec.id);
     }
   }
 

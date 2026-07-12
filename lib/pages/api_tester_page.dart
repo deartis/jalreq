@@ -6,6 +6,7 @@ import '../providers/request_provider.dart';
 import '../utils/constants.dart';
 import '../widgets/url_bar.dart';
 import '../widgets/headers_tab.dart';
+import '../widgets/query_params_tab.dart';
 import '../widgets/body_tab.dart';
 import '../widgets/auth_tab.dart';
 import '../widgets/response_panel.dart';
@@ -23,7 +24,7 @@ class ApiTesterPage extends StatefulWidget {
 
 class _ApiTesterPageState extends State<ApiTesterPage>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabCtrl = TabController(length: 3, vsync: this);
+  late final TabController _tabCtrl = TabController(length: 4, vsync: this);
 
   @override
   void dispose() {
@@ -144,6 +145,7 @@ class _ApiTesterPageState extends State<ApiTesterPage>
               controller: _tabCtrl,
               children: const [
                 HeadersTab(),
+                QueryParamsTab(),
                 BodyTab(),
                 AuthTab(),
               ],
@@ -218,6 +220,32 @@ class _ApiTesterPageState extends State<ApiTesterPage>
                     ),
                     child: Text(
                       '${provider.activeHeaderCount}',
+                      style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Params'),
+                if (provider.activeQueryParamCount > 0) ...[
+                  const SizedBox(width: 5),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: kPrimary,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(
+                      '${provider.activeQueryParamCount}',
                       style: const TextStyle(
                           color: Colors.black,
                           fontSize: 9,
