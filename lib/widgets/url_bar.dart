@@ -4,12 +4,39 @@ import 'package:provider/provider.dart';
 import '../providers/request_provider.dart';
 import '../utils/constants.dart';
 
-class UrlBar extends StatelessWidget {
+class UrlBar extends StatefulWidget {
   const UrlBar({super.key});
+
+  @override
+  State<UrlBar> createState() => _UrlBarState();
+}
+
+class _UrlBarState extends State<UrlBar> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final provider = context.read<RequestProvider>();
+    _controller = TextEditingController(text: provider.url);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<RequestProvider>();
+
+    // Sync state if it changed from outside (e.g. loaded collection)
+    if (_controller.text != provider.url) {
+      _controller.text = provider.url;
+      _controller.selection = TextSelection.collapsed(offset: provider.url.length);
+    }
+
     return Row(
       children: [
         Container(
@@ -22,7 +49,7 @@ class UrlBar extends StatelessWidget {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: provider.method,
-              dropdownColor: const Color(0xFF1F2937),
+              dropdownColor: const Color(0xFF1B2330),
               style: TextStyle(
                 color: kMethodColors[provider.method] ?? Colors.white,
                 fontSize: 12,
@@ -43,8 +70,7 @@ class UrlBar extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: TextField(
-            controller: TextEditingController(text: provider.url)
-              ..selection = TextSelection.collapsed(offset: provider.url.length),
+            controller: _controller,
             keyboardType: TextInputType.url,
             autocorrect: false,
             style: const TextStyle(fontSize: 12, color: kOnSurface),

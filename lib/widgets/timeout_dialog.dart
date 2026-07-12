@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/request_provider.dart';
-class TimeoutDialog extends StatelessWidget {
+class TimeoutDialog extends StatefulWidget {
   const TimeoutDialog({super.key});
 
   static Future<void> show(BuildContext context) {
@@ -13,9 +13,28 @@ class TimeoutDialog extends StatelessWidget {
   }
 
   @override
+  State<TimeoutDialog> createState() => _TimeoutDialogState();
+}
+
+class _TimeoutDialogState extends State<TimeoutDialog> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final provider = context.read<RequestProvider>();
+    _ctrl = TextEditingController(text: '${provider.timeoutSecs}');
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final provider = context.read<RequestProvider>();
-    final ctrl = TextEditingController(text: '${provider.timeoutSecs}');
     return AlertDialog(
       backgroundColor: const Color(0xFF1F1F1F),
       title: const Text('Configurar Timeout',
@@ -28,7 +47,7 @@ class TimeoutDialog extends StatelessWidget {
               style: TextStyle(color: Color(0xFF888888), fontSize: 12)),
           const SizedBox(height: 10),
           TextField(
-            controller: ctrl,
+            controller: _ctrl,
             keyboardType: TextInputType.number,
             style: const TextStyle(color: Colors.white),
             decoration: const InputDecoration(
@@ -41,7 +60,6 @@ class TimeoutDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () {
-            ctrl.dispose();
             Navigator.pop(context);
           },
           child: const Text('Cancelar',
@@ -49,8 +67,7 @@ class TimeoutDialog extends StatelessWidget {
         ),
         TextButton(
           onPressed: () {
-            final val = int.tryParse(ctrl.text.trim());
-            ctrl.dispose();
+            final val = int.tryParse(_ctrl.text.trim());
             if (val != null && val > 0) {
               provider.saveTimeout(val);
               Navigator.pop(context);

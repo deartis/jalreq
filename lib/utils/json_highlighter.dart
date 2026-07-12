@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'constants.dart';
 
 class JsonSyntaxHighlighter {
-  static const Color keyColor = Color(0xFF60A5FA);
-  static const Color stringColor = Color(0xFF34D399);
+  static const Color keyColor = kSecondary;
+  static const Color stringColor = kCodeGreen;
   static const Color numberColor = Color(0xFFFB923C);
-  static const Color boolColor = Color(0xFFF472B6);
+  static const Color boolColor = kPrimary;
   static const Color nullColor = Color(0xFFA78BFA);
-  static const Color defaultColor = Color(0xFFE0E0E0);
+  static const Color defaultColor = kOnSurface;
 
   static TextSpan highlight(String text) {
     final trimmed = text.trim();

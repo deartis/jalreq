@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,10 +12,9 @@ class HistorySheet extends StatelessWidget {
   static void show(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: kSurface,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (_) => const HistorySheet(),
     );
   }
@@ -22,15 +22,21 @@ class HistorySheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<RequestProvider>();
-    return StatefulBuilder(
-      builder: (ctx, setSheet) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.3,
-        builder: (_, scroll) => Column(
-          children: [
-            _sheetHandle(),
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          color: kSurface.withValues(alpha: 0.85),
+          child: StatefulBuilder(
+            builder: (ctx, setSheet) => DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.6,
+              maxChildSize: 0.9,
+              minChildSize: 0.3,
+              builder: (_, scroll) => Column(
+                children: [
+                  _sheetHandle(),
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -85,8 +91,11 @@ class HistorySheet extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+),
+);
+}
 
   Widget _sheetHandle() => Center(
         child: Container(

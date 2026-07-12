@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../models/request_model.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
+import '../utils/json_highlighter.dart';
 
 class RequestProvider extends ChangeNotifier {
   final _storage = StorageService();
@@ -37,9 +38,7 @@ class RequestProvider extends ChangeNotifier {
 
   // Storage
   List<RequestRecord> history = [];
-  List<RequestRecord> collections = [];
-  String currentCollectionId = '';
-  String? currentCollectionName;
+  List<Collection> collections = [];
 
   // Environment
   List<EnvironmentVariable> envVars = [];
@@ -50,6 +49,49 @@ class RequestProvider extends ChangeNotifier {
   String searchQuery = '';
 
   CancelToken? _cancelToken;
+
+  TextSpan? _cachedHighlightedBody;
+  String? _lastHighlightedBody;
+  String? _lastHighlightedQuery;
+
+  TextSpan getHighlightedBody() {
+    if (_cachedHighlightedBody != null &&
+        _lastHighlightedBody == responseBody &&
+        _lastHighlightedQuery == searchQuery) {
+      return _cachedHighlightedBody!;
+    }
+    _lastHighlightedBody = responseBody;
+    _lastHighlightedQuery = searchQuery;
+
+    final text = responseBody;
+    if (searchQuery.isEmpty) {
+      _cachedHighlightedBody = JsonSyntaxHighlighter.highlight(text);
+    } else {
+      final children = <InlineSpan>[];
+      final query = searchQuery.toLowerCase();
+      int start = 0;
+
+      while (true) {
+        final idx = text.toLowerCase().indexOf(query, start);
+        if (idx == -1) {
+          children.add(JsonSyntaxHighlighter.highlight(text.substring(start)));
+          break;
+        }
+        if (idx > start) {
+          children.add(
+              JsonSyntaxHighlighter.highlight(text.substring(start, idx)));
+        }
+        children.add(TextSpan(
+          text: text.substring(idx, idx + query.length),
+          style: const TextStyle(
+              color: Colors.black, backgroundColor: Color(0xFFFFD54F)),
+        ));
+        start = idx + query.length;
+      }
+      _cachedHighlightedBody = TextSpan(children: children);
+    }
+    return _cachedHighlightedBody!;
+  }
 
   int get activeHeaderCount => headerRows
       .where((r) => r.enabled && r.keyCtrl.text.trim().isNotEmpty)
@@ -220,7 +262,6 @@ class RequestProvider extends ChangeNotifier {
           timestamp: DateTime.now(),
           statusCode: result.statusCode,
           responseMs: result.durationMs,
-          name: currentCollectionName,
           followRedirects: followRedirects,
         ),
       );
@@ -329,8 +370,6 @@ class RequestProvider extends ChangeNotifier {
     bodyFieldRows.addAll(
       rec.bodyFields.map((f) => BodyFieldRowState(key: f.key, value: f.value)),
     );
-    currentCollectionId = rec.id;
-    currentCollectionName = rec.name;
     responseBody = '';
     statusCode = null;
     notifyListeners();
@@ -355,55 +394,95 @@ class RequestProvider extends ChangeNotifier {
     followRedirects = true;
     responseBody = '';
     statusCode = null;
-    currentCollectionId = '';
-    currentCollectionName = null;
     notifyListeners();
   }
 
-  Future<void> saveToCollection(String name) async {
-    final id = currentCollectionId.isEmpty
-        ? '${DateTime.now().millisecondsSinceEpoch}'
-        : currentCollectionId;
-
-    final rec = RequestRecord(
-      id: id,
-      method: method,
-      url: url.trim(),
-      body: body.trim(),
-      bodyType: bodyType,
-      headers: headerRows.map((r) => r.toEntry()).toList(),
-      bodyFields: bodyFieldRows
-          .where((r) => r.keyCtrl.text.trim().isNotEmpty)
-          .map(
-            (r) => BodyField(
-              id: r.uid,
-              key: r.keyCtrl.text.trim(),
-              value: r.valueCtrl.text,
-            ),
-          )
-          .toList(),
-      authType: authType,
-      authValue1: authValue1,
-      authValue2: authValue2,
-      timestamp: DateTime.now(),
-      name: name,
-      followRedirects: followRedirects,
-    );
-
-    await _storage.saveCollection(rec);
-    currentCollectionId = id;
-    currentCollectionName = name;
-    await loadCollections();
+  Future<void> createCollection(String name) async {
+    try {
+      final collection = Collection(
+        id: '${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        timestamp: DateTime.now(),
+        requests: [],
+      );
+      await _storage.saveCollection(collection);
+      await loadCollections();
+    } catch (e) {
+      debugPrint('Erro ao criar coleção: $e');
+    }
   }
 
-  Future<void> clearHistory() async {
-    await _storage.clearHistory();
-    await loadHistory();
+  Future<void> addRequestToCollection(String collectionId) async {
+    try {
+      final idx = collections.indexWhere((c) => c.id == collectionId);
+      if (idx < 0) return;
+
+      final record = RequestRecord(
+        id: '${DateTime.now().millisecondsSinceEpoch}',
+        method: method,
+        url: url.trim(),
+        body: body.trim(),
+        bodyType: bodyType,
+        headers: headerRows.map((r) => r.toEntry()).toList(),
+        bodyFields: bodyFieldRows
+            .where((r) => r.keyCtrl.text.trim().isNotEmpty)
+            .map(
+              (r) => BodyField(
+                id: r.uid,
+                key: r.keyCtrl.text.trim(),
+                value: r.valueCtrl.text,
+              ),
+            )
+            .toList(),
+        authType: authType,
+        authValue1: authValue1,
+        authValue2: authValue2,
+        timestamp: DateTime.now(),
+        followRedirects: followRedirects,
+      );
+
+      final old = collections[idx];
+      final updated = Collection(
+        id: old.id,
+        name: old.name,
+        timestamp: old.timestamp,
+        requests: [...old.requests, record],
+      );
+      await _storage.saveCollection(updated);
+      await loadCollections();
+    } catch (e) {
+      debugPrint('Erro ao adicionar request à coleção: $e');
+    }
   }
 
   Future<void> deleteCollection(String id) async {
     await _storage.deleteCollection(id);
     await loadCollections();
+  }
+
+  Future<void> deleteRequestFromCollection(
+      String collectionId, String requestId) async {
+    try {
+      final idx = collections.indexWhere((c) => c.id == collectionId);
+      if (idx < 0) return;
+
+      final old = collections[idx];
+      final updated = Collection(
+        id: old.id,
+        name: old.name,
+        timestamp: old.timestamp,
+        requests: old.requests.where((r) => r.id != requestId).toList(),
+      );
+      await _storage.saveCollection(updated);
+      await loadCollections();
+    } catch (e) {
+      debugPrint('Erro ao remover request da coleção: $e');
+    }
+  }
+
+  Future<void> clearHistory() async {
+    await _storage.clearHistory();
+    await loadHistory();
   }
 
   Future<void> saveTimeout(int secs) async {

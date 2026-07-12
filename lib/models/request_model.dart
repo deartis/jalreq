@@ -75,6 +75,40 @@ class EnvironmentVariable {
       );
 }
 
+class Collection {
+  final String id;
+  final String name;
+  final DateTime timestamp;
+  final List<RequestRecord> requests;
+
+  const Collection({
+    required this.id,
+    required this.name,
+    required this.timestamp,
+    this.requests = const [],
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'timestamp': timestamp.toIso8601String(),
+        'requests': requests.map((r) => r.toJson()).toList(),
+      };
+
+  factory Collection.fromJson(Map<String, dynamic> json) => Collection(
+        id: json['id'] as String? ?? _uuid.v4(),
+        name: json['name'] as String? ?? '',
+        timestamp:
+            DateTime.tryParse(json['timestamp'] as String? ?? '') ??
+                DateTime.now(),
+        requests: (json['requests'] as List<dynamic>?)
+                ?.map((r) =>
+                    RequestRecord.fromJson(r as Map<String, dynamic>))
+                .toList() ??
+            [],
+      );
+}
+
 class RequestRecord {
   final String id;
   final String method;

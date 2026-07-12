@@ -43,34 +43,53 @@ class _ApiTesterPageState extends State<ApiTesterPage>
             const Icon(Icons.bolt, color: kPrimary, size: 18),
             const SizedBox(width: 6),
             const Text('JAL REQ'),
-            if (provider.currentCollectionName != null) ...[
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  '· ${provider.currentCollectionName}',
-                  style: const TextStyle(
-                      color: kPrimary, fontSize: 11),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
           ],
         ),
         actions: [
+          GestureDetector(
+            onTap: () => provider.toggleEnvEnabled(),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: provider.envEnabled
+                    ? kPrimary.withValues(alpha: 0.15)
+                    : kSurface,
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(
+                  color: provider.envEnabled ? kPrimary : kBorder,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.circle,
+                    size: 8,
+                    color: provider.envEnabled ? kCodeGreen : kMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    provider.envEnabled ? 'ENV' : 'SEM ENV',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: provider.envEnabled ? kPrimary : kMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Histórico',
             onPressed: () => HistorySheet.show(context),
           ),
           IconButton(
-            icon: Icon(
-              provider.currentCollectionName != null
-                  ? Icons.star
-                  : Icons.star_border,
-              color: provider.currentCollectionName != null
-                  ? const Color(0xFFFBBF24)
-                  : null,
-            ),
+            icon: const Icon(Icons.star_border),
             tooltip: 'Coleções',
             onPressed: () => CollectionsSheet.show(context),
           ),
@@ -263,52 +282,152 @@ class _ApiTesterPageState extends State<ApiTesterPage>
   }
 
   Future<void> _saveToCollection(BuildContext context) async {
-    final provider = context.read<RequestProvider>();
-    final ctrl = TextEditingController(
-        text: provider.currentCollectionName ?? '');
-    final name = await showDialog<String>(
+    try {
+      final provider = context.read<RequestProvider>();
+      if (provider.url.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Insira uma URL antes de salvar na coleção'),
+          duration: Duration(seconds: 2),
+        ));
+        return;
+      }
+
+      final result = await showDialog<String>(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1F1F1F),
+          title: const Text('Salvar na coleção',
+              style: TextStyle(color: Colors.white, fontSize: 15)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.add, color: kPrimary, size: 20),
+                  title: const Text('Nova coleção',
+                      style:
+                          TextStyle(color: Colors.white, fontSize: 13)),
+                  onTap: () => Navigator.pop(ctx, 'new'),
+                ),
+                if (provider.collections.isNotEmpty) ...[
+                  const Divider(color: kBorder),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: provider.collections.length,
+                      separatorBuilder: (ctx, index) => const Divider(
+                          color: Color(0xFF1F1F1F),
+                          height: 1),
+                      itemBuilder: (_, i) {
+                        final col = provider.collections[i];
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.folder,
+                              color: kPrimary, size: 20),
+                          title: Text(col.name,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 13)),
+                          subtitle: Text(
+                            '${col.requests.length} ${col.requests.length == 1 ? 'request' : 'requests'}',
+                            style: const TextStyle(
+                                color: Color(0xFF666666),
+                                fontSize: 11),
+                          ),
+                          onTap: () =>
+                              Navigator.pop(ctx, col.id),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar',
+                  style: TextStyle(color: Color(0xFF888888))),
+            ),
+          ],
+        ),
+      );
+
+      if (result == null || result.isEmpty) return;
+
+      if (!context.mounted) return;
+
+      if (result == 'new') {
+        final name = await _showNewCollectionNameDialog(context);
+        if (name == null || name.isEmpty) return;
+        await provider.createCollection(name);
+        final newCol = provider.collections
+            .where((c) => c.name == name)
+            .lastOrNull;
+        if (newCol != null) {
+          await provider.addRequestToCollection(newCol.id);
+        }
+      } else {
+        await provider.addRequestToCollection(result);
+      }
+
+      if (context.mounted) {
+        final colName = result == 'new'
+            ? provider.collections.lastOrNull?.name ?? ''
+            : provider.collections
+                    .where((c) => c.id == result)
+                    .firstOrNull
+                    ?.name ??
+                '';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Request salvo em "$colName"'),
+          backgroundColor: kSurface,
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      debugPrint('Erro ao salvar na coleção: $e');
+    }
+  }
+
+  Future<String?> _showNewCollectionNameDialog(
+      BuildContext context) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
       context: context,
-      barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('Nome da coleção',
+        title: const Text('Nome da nova coleção',
             style: TextStyle(color: Colors.white, fontSize: 15)),
         content: TextField(
           controller: ctrl,
           autofocus: true,
           style: const TextStyle(color: Colors.white),
           decoration:
-              const InputDecoration(hintText: 'Ex: Login – Bearer'),
+              const InputDecoration(hintText: 'Ex: Minha API – Auth'),
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              ctrl.dispose();
-              Navigator.pop(ctx);
-            },
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar',
                 style: TextStyle(color: Color(0xFF888888))),
           ),
           TextButton(
             onPressed: () {
-              final text = ctrl.text.trim();
-              ctrl.dispose();
-              Navigator.pop(ctx, text);
+              Navigator.pop(ctx, ctrl.text.trim());
             },
-            child: const Text('Salvar',
+            child: Text('Criar',
                 style: TextStyle(color: kPrimary)),
           ),
         ],
       ),
     );
-    if (name == null || name.isEmpty) return;
-    await provider.saveToCollection(name);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Salvo como "$name"'),
-        backgroundColor: kSurface,
-        duration: const Duration(seconds: 2),
-      ));
-    }
+    ctrl.dispose();
+    return result;
   }
 }

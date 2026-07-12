@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../providers/request_provider.dart';
 import '../utils/constants.dart';
-import '../utils/json_highlighter.dart';
 
 class ResponsePanel extends StatelessWidget {
   const ResponsePanel({super.key});
@@ -45,7 +44,7 @@ class ResponsePanel extends StatelessWidget {
             child: provider.showRespHeaders
                 ? _buildResponseHeaders(provider)
                 : SelectableText.rich(
-                    _buildHighlightedText(provider),
+                    provider.getHighlightedBody(),
                     style: const TextStyle(
                         fontSize: 11, fontFamily: 'monospace', height: 1.6),
                   ),
@@ -59,23 +58,28 @@ class ResponsePanel extends StatelessWidget {
     return Row(
       children: [
         if (provider.statusCode != null)
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: _statusColor(provider.statusCode)
-                  .withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(
-                  color: _statusColor(provider.statusCode)
-                      .withValues(alpha: 0.3)),
-            ),
-            child: Text(
-              '${provider.statusCode}',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: _statusColor(provider.statusCode)),
+          Tooltip(
+            message: _statusDescription(provider.statusCode!),
+            triggerMode: TooltipTriggerMode.tap,
+            preferBelow: false,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: _statusColor(provider.statusCode)
+                    .withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(
+                    color: _statusColor(provider.statusCode)
+                        .withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                '${provider.statusCode}',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _statusColor(provider.statusCode)),
+              ),
             ),
           ),
         const SizedBox(width: 8),
@@ -160,38 +164,6 @@ class ResponsePanel extends StatelessWidget {
     );
   }
 
-  TextSpan _buildHighlightedText(RequestProvider provider) {
-    final text = provider.responseBody;
-
-    if (provider.searchQuery.isEmpty) {
-      return JsonSyntaxHighlighter.highlight(text);
-    }
-
-    final children = <InlineSpan>[];
-    final query = provider.searchQuery.toLowerCase();
-    int start = 0;
-
-    while (true) {
-      final idx = text.toLowerCase().indexOf(query, start);
-      if (idx == -1) {
-        children.add(JsonSyntaxHighlighter.highlight(text.substring(start)));
-        break;
-      }
-      if (idx > start) {
-        children.add(
-            JsonSyntaxHighlighter.highlight(text.substring(start, idx)));
-      }
-      children.add(TextSpan(
-        text: text.substring(idx, idx + query.length),
-        style: const TextStyle(
-            color: Colors.black, backgroundColor: Color(0xFFFFD54F)),
-      ));
-      start = idx + query.length;
-    }
-
-    return TextSpan(children: children);
-  }
-
   Widget _buildResponseHeaders(RequestProvider provider) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,5 +203,33 @@ class ResponsePanel extends StatelessWidget {
     if (bytes < 1024) return '${bytes}B';
     if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)}KB';
     return '${(bytes / 1048576).toStringAsFixed(1)}MB';
+  }
+
+  String _statusDescription(int code) {
+    if (code >= 100 && code < 200) return 'Informativo: A requisição foi recebida e o processo continua.';
+    if (code == 200) return '200 OK: Requisição bem-sucedida.';
+    if (code == 201) return '201 Created: Novo recurso criado com sucesso.';
+    if (code == 202) return '202 Accepted: Requisição aceita para processamento, mas ainda não concluída.';
+    if (code == 204) return '204 No Content: Sem conteúdo para retornar.';
+    if (code >= 200 && code < 300) return 'Sucesso: Requisição processada com sucesso.';
+    if (code == 301) return '301 Moved Permanently: Recurso movido permanentemente.';
+    if (code == 302) return '302 Found: Recurso movido temporariamente.';
+    if (code == 304) return '304 Not Modified: Recurso não modificado (cached).';
+    if (code >= 300 && code < 400) return 'Redirecionamento: Mais ações são necessárias para completar a requisição.';
+    if (code == 400) return '400 Bad Request: Requisição inválida ou malformada.';
+    if (code == 401) return '401 Unauthorized: Autenticação necessária ou inválida.';
+    if (code == 403) return '403 Forbidden: Sem permissões para acessar o recurso.';
+    if (code == 404) return '404 Not Found: Recurso não encontrado.';
+    if (code == 405) return '405 Method Not Allowed: Método HTTP não suportado pelo recurso.';
+    if (code == 409) return '409 Conflict: Conflito no estado atual do recurso.';
+    if (code == 422) return '422 Unprocessable Entity: Erros de validação nos campos enviados.';
+    if (code == 429) return '429 Too Many Requests: Limite de requisições excedido.';
+    if (code >= 400 && code < 500) return 'Erro do Cliente: Erro do lado do cliente.';
+    if (code == 500) return '500 Internal Server Error: Erro interno no servidor.';
+    if (code == 502) return '502 Bad Gateway: Resposta inválida do servidor upstream.';
+    if (code == 503) return '503 Service Unavailable: Servidor temporariamente indisponível ou em manutenção.';
+    if (code == 504) return '504 Gateway Timeout: O servidor upstream demorou para responder.';
+    if (code >= 500) return 'Erro do Servidor: Erro do lado do servidor.';
+    return 'Status Code desconhecido.';
   }
 }
